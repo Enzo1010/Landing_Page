@@ -1,4 +1,4 @@
-# Landing Page — RM Guindastes
+# Landing Page - RM Guindastes
 
 Projeto de landing page responsiva.
 
