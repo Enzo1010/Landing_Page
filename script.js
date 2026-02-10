@@ -1,3 +1,6 @@
+/* ==========================================================================
+   Configuracao central da landing
+   ========================================================================== */
 const SITE_CONFIG = {
   business: {
     companyName: "RM Guindastes",
@@ -16,29 +19,58 @@ const SITE_CONFIG = {
   },
 };
 
+/* ==========================================================================
+   Helpers de DOM
+   ========================================================================== */
+function each(selector, callback) {
+  const elements = document.querySelectorAll(selector);
+  if (!elements.length) return;
+  elements.forEach(callback);
+}
+
+function setText(selector, value) {
+  each(selector, (node) => {
+    node.textContent = value;
+  });
+}
+
+function setAttribute(selector, attribute, value) {
+  each(selector, (node) => {
+    node.setAttribute(attribute, value);
+  });
+}
+
+/* ==========================================================================
+   Dados de contato e marca
+   ========================================================================== */
 function normalizePhoneDigits(value) {
   return String(value || "").replace(/\D+/g, "");
 }
 
 function buildWhatsAppLink(number, message) {
-  return `https://wa.me/${normalizePhoneDigits(number)}?text=${encodeURIComponent(message)}`;
+  const phoneDigits = normalizePhoneDigits(number);
+  if (!phoneDigits) {
+    console.warn("WhatsApp number is empty or invalid");
+    return "#";
+  }
+  return `https://wa.me/${phoneDigits}?text=${encodeURIComponent(message)}`;
 }
 
 function wireWhatsAppLinks() {
   const { whatsappNumber, whatsappMessage } = SITE_CONFIG.contact;
   const href = buildWhatsAppLink(whatsappNumber, whatsappMessage);
-  document.querySelectorAll("[data-whatsapp]").forEach((link) => {
-    link.setAttribute("href", href);
-  });
+  setAttribute("[data-whatsapp]", "href", href);
 }
 
 function wireContactInfo() {
   const { phoneDisplay, phoneE164, email } = SITE_CONFIG.contact;
-  document.querySelectorAll("[data-phone-link]").forEach((link) => {
+
+  each("[data-phone-link]", (link) => {
     link.setAttribute("href", `tel:${phoneE164}`);
     link.textContent = phoneDisplay;
   });
-  document.querySelectorAll("[data-email-link]").forEach((link) => {
+
+  each("[data-email-link]", (link) => {
     link.setAttribute("href", `mailto:${email}`);
     link.textContent = email;
   });
@@ -46,42 +78,38 @@ function wireContactInfo() {
 
 function wireBrandText() {
   const { companyName, brandTitle, initials } = SITE_CONFIG.business;
-  document.querySelectorAll("[data-company-name]").forEach((node) => {
-    node.textContent = companyName;
-  });
-  document.querySelectorAll("[data-brand-title]").forEach((node) => {
-    node.textContent = brandTitle;
-  });
-  document.querySelectorAll("[data-company-initials]").forEach((node) => {
-    node.textContent = initials;
-  });
+  setText("[data-company-name]", companyName);
+  setText("[data-brand-title]", brandTitle);
+  setText("[data-company-initials]", initials);
 }
 
 function wireInstagramLinks() {
   const { instagramUrl } = SITE_CONFIG.business;
-  document.querySelectorAll("[data-instagram-link]").forEach((link) => {
-    link.setAttribute("href", instagramUrl);
-  });
+  setAttribute("[data-instagram-link]", "href", instagramUrl);
 }
 
 function wireBrandLogos() {
   const { logoPath, logoAlt } = SITE_CONFIG.business;
-  const hasLogo = Boolean(logoPath && logoPath.trim());
-  document.querySelectorAll("[data-logo-slot]").forEach((slot) => {
+  const hasLogoPath = Boolean(logoPath && logoPath.trim());
+
+  each("[data-logo-slot]", (slot) => {
     const image = slot.querySelector("[data-logo-image]");
     if (!image) return;
 
+    // Estado base: mostra fallback textual.
     slot.classList.remove("has-logo");
     image.hidden = true;
     image.removeAttribute("src");
 
-    if (!hasLogo) return;
+    if (!hasLogoPath) return;
 
+    // Mostra logo apenas quando carregar com sucesso.
     const showLogo = () => {
       image.hidden = false;
       slot.classList.add("has-logo");
     };
 
+    // Em erro de arquivo/caminho, volta para o fallback.
     const hideLogo = () => {
       image.hidden = true;
       slot.classList.remove("has-logo");
@@ -92,6 +120,7 @@ function wireBrandLogos() {
     image.alt = logoAlt;
     image.src = logoPath;
 
+    // Verifica se a imagem ja carregou (cached)
     if (image.complete && image.naturalWidth > 0) {
       showLogo();
     }
@@ -100,44 +129,55 @@ function wireBrandLogos() {
 
 function wireCurrentYear() {
   const year = String(new Date().getFullYear());
-  document.querySelectorAll("[data-current-year]").forEach((node) => {
-    node.textContent = year;
-  });
+  setText("[data-current-year]", year);
 }
 
+/* ==========================================================================
+   Comportamentos de interface
+   ========================================================================== */
 function setupNavToggle() {
   const toggle = document.querySelector(".nav-toggle");
   const nav = document.getElementById("nav");
   if (!toggle || !nav) return;
 
-  const setState = (isOpen) => {
+  const setMenuState = (isOpen) => {
     toggle.setAttribute("aria-expanded", String(isOpen));
     toggle.setAttribute("aria-label", isOpen ? "Fechar menu" : "Abrir menu");
   };
 
+  const closeMenu = () => {
+    nav.classList.remove("is-open");
+    setMenuState(false);
+  };
+
   toggle.addEventListener("click", () => {
     const isOpen = nav.classList.toggle("is-open");
-    setState(isOpen);
+    setMenuState(isOpen);
   });
 
-  nav.querySelectorAll("a").forEach((link) =>
-    link.addEventListener("click", () => {
-      nav.classList.remove("is-open");
-      setState(false);
-    })
-  );
+  // Fecha menu ao clicar em um link interno
+  each("#nav a", (link) => {
+    link.addEventListener("click", closeMenu);
+  });
+
+  // Fecha menu ao clicar em qualquer parte fora dele (melhor UX)
+  document.addEventListener("click", (e) => {
+    if (!nav.contains(e.target) && !toggle.contains(e.target)) {
+      closeMenu();
+    }
+  });
 }
 
 function elevateTopbarOnScroll() {
   const topbar = document.getElementById("topbar");
   if (!topbar) return;
 
-  const handler = () => {
+  const updateTopbarElevation = () => {
     topbar.classList.toggle("is-scrolled", window.scrollY > 6);
   };
 
-  handler();
-  window.addEventListener("scroll", handler, { passive: true });
+  updateTopbarElevation();
+  window.addEventListener("scroll", updateTopbarElevation, { passive: true });
 }
 
 function setupReveals() {
@@ -146,12 +186,16 @@ function setupReveals() {
     window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  // Fallback: sem animacao para acessibilidade ou navegadores sem suporte.
   if (
     prefersReducedMotion ||
     !("IntersectionObserver" in window) ||
     reveals.length === 0
   ) {
-    const showAll = () => reveals.forEach((el) => el.classList.add("visible"));
+    const showAll = () => {
+      reveals.forEach((element) => element.classList.add("visible"));
+    };
+
     if (prefersReducedMotion) {
       showAll();
     } else {
@@ -160,25 +204,28 @@ function setupReveals() {
     return;
   }
 
-  reveals.forEach((el, idx) => {
-    el.style.transitionDelay = `${(idx % 6) * 60}ms`;
+  // Pequeno atraso em cascata para entrada mais natural dos blocos.
+  reveals.forEach((element, index) => {
+    element.style.transitionDelay = `${(index % 6) * 60}ms`;
   });
 
   const observer = new IntersectionObserver(
     (entries) => {
       entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add("visible");
-          observer.unobserve(entry.target);
-        }
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add("visible");
+        observer.unobserve(entry.target);
       });
     },
     { threshold: 0.12, rootMargin: "0px 0px -10% 0px" }
   );
 
-  reveals.forEach((el) => observer.observe(el));
+  reveals.forEach((element) => observer.observe(element));
 }
 
+/* ==========================================================================
+   Bootstrap
+   ========================================================================== */
 function init() {
   wireBrandText();
   wireBrandLogos();
@@ -191,4 +238,10 @@ function init() {
   setupReveals();
 }
 
-document.addEventListener("DOMContentLoaded", init);
+// Aguarda DOMContentLoaded antes de executar
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  // Documento já carregou (script foi async ou defer)
+  init();
+}
